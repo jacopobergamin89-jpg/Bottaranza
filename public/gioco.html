@@ -4662,6 +4662,36 @@ const Ads={
   b.onclick=()=>{if(!b.disabled){d.remove();}};}
 };
 
+/* ---------- Pubblicità vera: Google AdSense per giochi web (Ad Placement API) ----------
+   Si attiva inserendo il codice editore in ADS_CLIENT (es. 'ca-pub-1234567890123456').
+   Finché è vuoto, restano le pubblicità di prova. */
+const ADS_CLIENT='';
+(function(){
+ if(!ADS_CLIENT||!/^https?:$/.test(location.protocol))return;
+ window.adsbygoogle=window.adsbygoogle||[];
+ window.adBreak=window.adConfig=function(o){adsbygoogle.push(o);};
+ if(Ads.mode()!=='pa')adsbygoogle.requestNonPersonalizedAds=1;
+ const sc=document.createElement('script');sc.async=true;sc.crossOrigin='anonymous';
+ sc.src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client='+encodeURIComponent(ADS_CLIENT);
+ sc.setAttribute('data-ad-frequency-hint','120s');
+ document.head.appendChild(sc);
+ adConfig({preloadAdBreaks:'on',sound:'on'});
+ const fakeRew=Ads.rewarded.bind(Ads);
+ Ads.rewarded=function(done){
+  let got=false;
+  adBreak({type:'reward',name:'premio',
+   beforeReward:show=>show(),
+   adViewed:()=>{got=true;},
+   adDismissed:()=>{got=false;},
+   adBreakDone:info=>{
+    if(info&&info.breakStatus==='viewed'||got){done&&done(true);return;}
+    if(info&&/notReady|noAdPreloaded|frequencyCapped|other/.test(info.breakStatus)){toast('Nessun video disponibile adesso: riprova più tardi.');done&&done(false);return;}
+    toast('Video interrotto: nessun premio.');done&&done(false);
+   }});
+ };
+ Ads.interstitial=function(){adBreak({type:'next',name:'pausa'});};
+})();
+
 /* ---------- Testi legali ---------- */
 const LEGAL={version:'2026-11-19',
  owner:'Shuno srl (P.IVA e C.F. 14881810965, REA MB-2812820, PEC shuno_srl@pec.it)',addr:'Via Pisa 2, 20834 Nova Milanese (MB)',mail:'assistenza@shuno.it',
