@@ -1,0 +1,79 @@
+// Bottaranza – API account e salvataggi (Cloudflare Workers + D1)
+const J=(o,s=200)=>new Response(JSON.stringify(o),{status:s,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
+const err=(m,s=400)=>J({error:m},s);
+const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+const rnd=n=>hex(crypto.getRandomValues(new Uint8Array(n)));
+async function hash(pw,salt){
+  const enc=new TextEncoder();
+  const key=await crypto.subtle.importKey('raw',enc.encode(pw),'PBKDF2',false,['deriveBits']);
+  return hex(await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations:100000,hash:'SHA-256'},key,256));
+}
+function same(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
+const okEmail=e=>typeof e==='string'&&e.length<=120&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+async function body(req){try{return await req.json();}catch{return null;}}
+async function who(req,env){
+  const a=req.headers.get('authorization')||'';const t=a.startsWith('Bearer ')?a.slice(7):'';
+  if(!/^[0-9a-f]{64}$/.test(t))return null;
+  const r=await env.DB.prepare('SELECT email FROM sessions WHERE token=?').bind(t).first();
+  return r?{email:r.email,token:t}:null;
+}
+async function newSession(env,email){const t=rnd(32);await env.DB.prepare('INSERT INTO sessions(token,email,created_at) VALUES(?,?,?)').bind(t,email,Date.now()).run();return t;}
+
+export default {
+  async fetch(req,env){
+    const url=new URL(req.url),p=url.pathname,m=req.method;
+    if(!p.startsWith('/api/'))return env.ASSETS.fetch(req);
+    if(m!=='GET'&&req.headers.get('content-type')?.includes('application/json')!==true&&m!=='DELETE')return err('Formato non valido.',415);
+    try{
+      if(p==='/api/register'&&m==='POST'){
+        const b=await body(req);if(!b)return err('Richiesta non valida.');
+        const email=String(b.email||'').trim().toLowerCase(),pw=String(b.pw||''),nick=String(b.nick||'').trim().slice(0,20);
+        if(!okEmail(email))return err('Email non valida.');
+        if(pw.length<8||pw.length>200)return err('La password deve avere almeno 8 caratteri.');
+        if(!nick)return err('Serve un nickname.');
+        if(!['minor','adult'].includes(b.age))return err('Fascia d\'età non valida.');
+        const ex=await env.DB.prepare('SELECT 1 FROM users WHERE email=?').bind(email).first();
+        if(ex)return err('Esiste già un account con questa email.',409);
+        const salt=rnd(16);
+        await env.DB.prepare('INSERT INTO users(email,nick,salt,hash,age,terms_version,terms_at,created_at) VALUES(?,?,?,?,?,?,?,?)')
+          .bind(email,nick,salt,await hash(pw,salt),b.age,String(b.tv||''),Date.now(),Date.now()).run();
+        return J({token:await newSession(env,email),email,nick});
+      }
+      if(p==='/api/login'&&m==='POST'){
+        const b=await body(req);if(!b)return err('Richiesta non valida.');
+        const email=String(b.email||'').trim().toLowerCase(),pw=String(b.pw||'');
+        const u=await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(email).first();
+        if(!u||!same(u.hash,await hash(pw,u.salt)))return err('Email o password non corretti.',401);
+        return J({token:await newSession(env,email),email,nick:u.nick});
+      }
+      const me=await who(req,env);
+      if(!me)return err('Sessione scaduta: accedi di nuovo.',401);
+      if(p==='/api/logout'&&m==='POST'){await env.DB.prepare('DELETE FROM sessions WHERE token=?').bind(me.token).run();return J({ok:true});}
+      if(p==='/api/save'&&m==='GET'){
+        const s=await env.DB.prepare('SELECT at,data FROM saves WHERE email=?').bind(me.email).first();
+        return J(s?{at:s.at,data:JSON.parse(s.data)}:{at:0,data:null});
+      }
+      if(p==='/api/save'&&m==='PUT'){
+        const raw=await req.text();if(raw.length>400000)return err('Salvataggio troppo grande.',413);
+        let b;try{b=JSON.parse(raw);}catch{return err('Richiesta non valida.');}
+        const at=Number(b.at)||Date.now();
+        await env.DB.prepare('INSERT INTO saves(email,at,data) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET at=excluded.at,data=excluded.data WHERE excluded.at>=saves.at')
+          .bind(me.email,at,JSON.stringify(b.data??null)).run();
+        return J({ok:true,at});
+      }
+      if(p==='/api/export'&&m==='GET'){
+        const u=await env.DB.prepare('SELECT email,nick,age,terms_version,terms_at,created_at FROM users WHERE email=?').bind(me.email).first();
+        const s=await env.DB.prepare('SELECT at,data FROM saves WHERE email=?').bind(me.email).first();
+        return J({account:u,salvataggio:s?{at:s.at,data:JSON.parse(s.data)}:null});
+      }
+      if(p==='/api/account'&&m==='DELETE'){
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM saves WHERE email=?').bind(me.email),
+          env.DB.prepare('DELETE FROM sessions WHERE email=?').bind(me.email),
+          env.DB.prepare('DELETE FROM users WHERE email=?').bind(me.email)]);
+        return J({ok:true});
+      }
+      return err('Non trovato.',404);
+    }catch(e){return err('Errore del server. Riprova tra poco.',500);}
+  }
+};

@@ -1,0 +1,14 @@
+name = "bottaranza"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bottaranza-db"
+database_id = "46fc3807-66e2-401f-a596-33cb0dbacd47"
