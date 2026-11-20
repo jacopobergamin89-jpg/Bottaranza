@@ -1,5 +1,5 @@
 /* Bottaranza: cache minima per l'installazione come app e il gioco offline */
-const CACHE='bottaranza-v2';
+const CACHE='bottaranza-v3';
 const FILES=['./','index.html','gioco.html','manifest.webmanifest','img/icon-192.png','img/icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))).then(()=>self.clients.claim()));});
