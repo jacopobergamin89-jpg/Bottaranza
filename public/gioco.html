@@ -5099,6 +5099,7 @@ JEWEL.push(...NEWI.jewel);MARKET.push(...NEWI.market);SHOP.push(...NEWI.shop);
 for(const x of [...NEWI.jewel,...NEWI.market,...NEWI.shop])ACCN[x.k]=x.n.replace(/ \(.*\)$/,'');
 
 /* ---------------- 5. FLAMMA ---------------- */
+const _rc=renderCreate;renderCreate=function(){const was=document.getElementById('nm'),sc=was&&app.querySelector('[style*="overflow:auto"]'),y=sc?sc.scrollTop:0,wy=window.scrollY;_rc();const n=app.querySelector('[style*="overflow:auto"]');if(was){if(n)n.scrollTop=y;window.scrollTo(0,wy);}};
 const _ng=newGame;newGame=function(){const r=_ng.apply(this,arguments);if(S&&S.ch.likes==='t'){S.ch.likesAll=1;S.ch.likes=S.ch.gender==='f'?'m':'f';}return r;};
 flProfile=function(){const pref=pick(Object.keys(FL_PREF));const mine=S.ch.gender==='f'?'f':'m';let lk=S.ch.likes,oop=false;
  if(S.ch.likesAll||lk==='t')lk=Math.random()<.5?'f':'m';else if(Math.random()<.1&&lk!==mine){lk=mine;oop=true;}
