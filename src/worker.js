@@ -14,9 +14,14 @@ async function body(req){try{return await req.json();}catch{return null;}}
 async function who(req,env){
   const a=req.headers.get('authorization')||'';const t=a.startsWith('Bearer ')?a.slice(7):'';
   if(!/^[0-9a-f]{64}$/.test(t))return null;
-  const r=await env.DB.prepare('SELECT email FROM sessions WHERE token=?').bind(t).first();
+  const r=await env.DB.prepare('SELECT email,created_at FROM sessions WHERE token=?').bind(t).first();
+  if(r&&Date.now()-r.created_at>SESS_MAX){await env.DB.prepare('DELETE FROM sessions WHERE token=?').bind(t).run();return null;}
   return r?{email:r.email,token:t}:null;
 }
+const WIN=15*60*1000;
+async function tooMany(env,keys,max){const since=Date.now()-WIN;for(const [k,n] of keys){const r=await env.DB.prepare('SELECT COUNT(*) c FROM attempts WHERE k=? AND at>?').bind(k,since).first();if(r&&r.c>=n)return true;}return false;}
+async function fail(env,keys){const now=Date.now();await env.DB.batch(keys.map(([k])=>env.DB.prepare('INSERT INTO attempts(k,at) VALUES(?,?)').bind(k,now)));if(Math.random()<.05)await env.DB.prepare('DELETE FROM attempts WHERE at<?').bind(now-WIN).run();}
+const SESS_MAX=90*24*3600*1000;
 async function newSession(env,email){const t=rnd(32);await env.DB.prepare('INSERT INTO sessions(token,email,created_at) VALUES(?,?,?)').bind(t,email,Date.now()).run();return t;}
 
 export default {
@@ -32,18 +37,23 @@ export default {
         if(pw.length<8||pw.length>200)return err('La password deve avere almeno 8 caratteri.');
         if(!nick)return err('Serve un nickname.');
         if(!['minor','adult'].includes(b.age))return err('Fascia d\'età non valida.');
+        const ipk=[['reg:'+(req.headers.get('cf-connecting-ip')||'x'),5]];
+        if(await tooMany(env,ipk))return err('Troppi account creati da questa connessione. Riprova più tardi.',429);
         const ex=await env.DB.prepare('SELECT 1 FROM users WHERE email=?').bind(email).first();
         if(ex)return err('Esiste già un account con questa email.',409);
         const salt=rnd(16);
         await env.DB.prepare('INSERT INTO users(email,nick,salt,hash,age,terms_version,terms_at,created_at) VALUES(?,?,?,?,?,?,?,?)')
           .bind(email,nick,salt,await hash(pw,salt),b.age,String(b.tv||''),Date.now(),Date.now()).run();
+        await fail(env,ipk);
         return J({token:await newSession(env,email),email,nick});
       }
       if(p==='/api/login'&&m==='POST'){
         const b=await body(req);if(!b)return err('Richiesta non valida.');
         const email=String(b.email||'').trim().toLowerCase(),pw=String(b.pw||'');
+        const keys=[['ip:'+(req.headers.get('cf-connecting-ip')||'x'),20],['em:'+email,8]];
+        if(await tooMany(env,keys))return err('Troppi tentativi sbagliati. Riprova tra 15 minuti.',429);
         const u=await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(email).first();
-        if(!u||!same(u.hash,await hash(pw,u.salt)))return err('Email o password non corretti.',401);
+        if(!u||!same(u.hash,await hash(pw,u.salt))){await fail(env,keys);return err('Email o password non corretti.',401);}
         return J({token:await newSession(env,email),email,nick:u.nick});
       }
       const me=await who(req,env);
