@@ -2,6 +2,11 @@ name = "bottaranza"
 main = "src/worker.js"
 compatibility_date = "2026-11-01"
 
+routes = [
+  { pattern = "bottaranza.it", custom_domain = true },
+  { pattern = "www.bottaranza.it", custom_domain = true }
+]
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
