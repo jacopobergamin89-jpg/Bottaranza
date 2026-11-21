@@ -7,6 +7,9 @@ routes = [
   { pattern = "www.bottaranza.it", custom_domain = true }
 ]
 
+[vars]
+STATS_KEY = "uYCl9mukzFr8KnWF"
+
 [assets]
 directory = "./public"
 binding = "ASSETS"

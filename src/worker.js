@@ -30,6 +30,38 @@ export default {
     if(!p.startsWith('/api/'))return env.ASSETS.fetch(req);
     if(m!=='GET'&&req.headers.get('content-type')?.includes('application/json')!==true&&m!=='DELETE')return err('Formato non valido.',415);
     try{
+      const ip=req.headers.get('cf-connecting-ip')||'x',day=new Date().toISOString().slice(0,10);
+      const bump=(k)=>env.DB.prepare('INSERT INTO stats(d,k,n) VALUES(?,?,1) ON CONFLICT(d,k) DO UPDATE SET n=n+1').bind(day,k).run();
+      if(p==='/api/ev'&&m==='POST'){
+        const b=await body(req);const k=b&&String(b.k||'');
+        if(!/^(start|day5|day10|day30|bot_(maranza|insta|aura|gym|crypto|pet)|tut_done|tut_skip)$/.test(k))return err('Evento non valido.');
+        if(await tooMany(env,[['ev:'+ip,300]]))return J({ok:false});
+        await fail(env,[['ev:'+ip]]);await bump(k);return J({ok:true});
+      }
+      if(p==='/api/feedback'&&m==='POST'){
+        const b=await body(req);if(!b)return err('Richiesta non valida.');
+        const kind=['bug','idea','commento'].includes(b.kind)?b.kind:'commento';
+        const msg=String(b.msg||'').trim().slice(0,2000);if(msg.length<3)return err('Scrivi almeno qualche parola.');
+        const mail=String(b.mail||'').trim().slice(0,120);if(mail&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail))return err('Email non valida.');
+        const since=Date.now()-3600*1000;const c=await env.DB.prepare('SELECT COUNT(*) c FROM attempts WHERE k=? AND at>?').bind('fb:'+ip,since).first();
+        if(c&&c.c>=5)return err('Hai già mandato 5 messaggi in un\'ora. Riprova più tardi.',429);
+        await env.DB.prepare('INSERT INTO attempts(k,at) VALUES(?,?)').bind('fb:'+ip,Date.now()).run();
+        await env.DB.prepare('INSERT INTO feedback(at,kind,msg,mail,meta,done) VALUES(?,?,?,?,?,0)').bind(Date.now(),kind,msg,mail,JSON.stringify(b.meta||{}).slice(0,600)).run();
+        await bump('fb_'+kind);return J({ok:true});
+      }
+      if(p.startsWith('/api/admin/')){
+        if(!env.STATS_KEY||req.headers.get('x-key')!==env.STATS_KEY){await new Promise(r=>setTimeout(r,800));return err('Codice errato.',401);}
+        if(p==='/api/admin/stats'&&m==='GET'){
+          const st=await env.DB.prepare('SELECT d,k,n FROM stats WHERE d>=? ORDER BY d DESC').bind(new Date(Date.now()-90*864e5).toISOString().slice(0,10)).all();
+          const fb=await env.DB.prepare('SELECT id,at,kind,msg,mail,meta,done FROM feedback ORDER BY done ASC, at DESC LIMIT 300').all();
+          const us=await env.DB.prepare('SELECT COUNT(*) c FROM users').first();
+          return J({stats:st.results,feedback:fb.results,users:us?us.c:0});
+        }
+        if(p==='/api/admin/fb'&&m==='POST'){const b=await body(req);if(!b)return err('Richiesta non valida.');
+          if(b.del)await env.DB.prepare('DELETE FROM feedback WHERE id=?').bind(+b.id).run();
+          else await env.DB.prepare('UPDATE feedback SET done=? WHERE id=?').bind(b.done?1:0,+b.id).run();return J({ok:true});}
+        return err('Non trovato.',404);
+      }
       if(p==='/api/register'&&m==='POST'){
         const b=await body(req);if(!b)return err('Richiesta non valida.');
         const email=String(b.email||'').trim().toLowerCase(),pw=String(b.pw||''),nick=String(b.nick||'').trim().slice(0,20);
@@ -44,7 +76,7 @@ export default {
         const salt=rnd(16);
         await env.DB.prepare('INSERT INTO users(email,nick,salt,hash,age,terms_version,terms_at,created_at) VALUES(?,?,?,?,?,?,?,?)')
           .bind(email,nick,salt,await hash(pw,salt),b.age,String(b.tv||''),Date.now(),Date.now()).run();
-        await fail(env,ipk);
+        await fail(env,ipk);await bump('acct');
         return J({token:await newSession(env,email),email,nick});
       }
       if(p==='/api/login'&&m==='POST'){

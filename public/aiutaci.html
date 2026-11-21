@@ -1,0 +1,26 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aiutaci a migliorare – Bottaranza</title><meta name="google-adsense-account" content="ca-pub-1647800971870079">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:linear-gradient(160deg,#FFE9F3,#E6F4FF 50%,#EFFFE6);color:#1E2A55;min-height:100vh}
+main{max-width:620px;margin:0 auto;padding:26px 16px 60px}nav{font-weight:700;margin-bottom:14px}a{color:#3C7BFF}
+.card{background:#fff;border-radius:22px;padding:20px;box-shadow:0 4px 0 rgba(37,99,235,.15)}h1{margin:0 0 6px;font-size:28px}
+.ks{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:14px 0}.ks button{min-height:52px;border-radius:14px;border:2px solid #CFE0FF;background:#F1F6FF;font-weight:800;font-size:15px;color:#1E2A55;cursor:pointer}
+.ks button.on{border-color:#FF5FA2;background:#FFF0F7}
+textarea,input{width:100%;border-radius:14px;border:2px solid #CFE0FF;padding:12px;font:inherit;color:#1E2A55}textarea{min-height:140px;resize:vertical}
+label{display:block;font-weight:700;font-size:14px;margin:12px 0 6px}.go{width:100%;min-height:52px;margin-top:14px;border:0;border-radius:16px;font-weight:800;font-size:16px;color:#fff;background:linear-gradient(90deg,#FF5FA2,#FF9A3C);cursor:pointer}
+small{color:#4A5A8A}#ok{display:none;text-align:center;padding:30px 10px}
+</style></head><body><main>
+<nav><a href="/">← Bottaranza</a> · <a href="/gioco">Gioca</a></nav>
+<div class="card" id="form"><h1>Aiutaci a migliorare</h1><small>Hai trovato un bug, hai un'idea o vuoi dirci cosa ne pensi? Leggiamo tutto.</small>
+<div class="ks" id="ks"><button data-k="bug" class="on">🐞 Bug</button><button data-k="idea">💡 Idea</button><button data-k="commento">💬 Commento</button></div>
+<label for="msg">Messaggio</label><textarea id="msg" maxlength="2000" placeholder="Cosa è successo? Dove eri nel gioco?"></textarea>
+<label for="mail">La tua email <small>(facoltativa, solo se vuoi una risposta)</small></label><input id="mail" type="email" maxlength="120" autocomplete="email">
+<button class="go" id="send">Invia</button><div id="err" style="color:#D9485F;font-size:14px;margin-top:8px"></div>
+<p style="font-size:12px;color:#4A5A8A;margin-top:12px">Insieme al messaggio inviamo solo il tipo di dispositivo (telefono o PC). Dettagli nell'<a href="/privacy">informativa privacy</a>.</p></div>
+<div class="card" id="ok"><div style="font-size:52px">🙏</div><h1>Grazie!</h1><p>Il tuo messaggio è arrivato.</p><a href="/gioco">Torna a giocare</a></div>
+</main><script>
+let K='bug';document.getElementById('ks').onclick=e=>{const b=e.target.closest('[data-k]');if(!b)return;K=b.dataset.k;document.querySelectorAll('#ks button').forEach(x=>x.classList.toggle('on',x===b));};
+document.getElementById('send').onclick=async()=>{const er=document.getElementById('err');er.textContent='';
+ const msg=document.getElementById('msg').value.trim(),mail=document.getElementById('mail').value.trim();if(msg.length<3){er.textContent='Scrivi almeno qualche parola.';return;}
+ try{const r=await fetch('/api/feedback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({kind:K,msg,mail,meta:{da:'sito',dispositivo:/Mobi|Android|iPhone/i.test(navigator.userAgent)?'telefono':'PC'}})});const j=await r.json();if(!r.ok)throw new Error(j.error||'Errore');
+ document.getElementById('form').style.display='none';document.getElementById('ok').style.display='block';}catch(e){er.textContent=e.message||'Non riesco a inviare. Riprova.';}};
+</script></body></html>

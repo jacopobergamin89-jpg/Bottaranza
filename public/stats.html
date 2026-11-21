@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Statistiche – Bottaranza</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:linear-gradient(160deg,#FFE9F3,#E6F4FF 50%,#EFFFE6);color:#1E2A55;min-height:100vh}
+main{max-width:980px;margin:0 auto;padding:22px 16px 60px}h1{margin:0 0 4px;font-size:28px}h2{font-size:19px;margin:26px 0 10px}
+.card{background:#fff;border-radius:20px;padding:16px 18px;box-shadow:0 4px 0 rgba(37,99,235,.15);margin-bottom:12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.kpi{background:#fff;border-radius:18px;padding:14px;box-shadow:0 4px 0 rgba(37,99,235,.15)}
+.kpi b{display:block;font-size:28px}.kpi span{font-size:12.5px;color:#4A5A8A;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{text-align:right;padding:6px 8px;border-bottom:1px solid #E5EDF7}th:first-child,td:first-child{text-align:left}
+input,button,select{font:inherit}input{min-height:44px;border-radius:12px;border:2px solid #CFE0FF;padding:0 12px;width:100%}
+button{min-height:40px;border-radius:12px;border:0;font-weight:800;padding:0 14px;cursor:pointer;background:#E5EDF7;color:#1E2A55}
+.go{background:linear-gradient(90deg,#FF5FA2,#FF9A3C);color:#fff}.tag{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:800;color:#fff}
+.bug{background:#FF5F7E}.idea{background:#2EC27E}.commento{background:#3C7BFF}.done{opacity:.5}.meta{font-size:12px;color:#4A5A8A;margin-top:6px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.filters button.on{background:#1E2A55;color:#fff}
+</style></head><body><main>
+<h1>Statistiche Bottaranza</h1><div style="font-size:13px;color:#4A5A8A;margin-bottom:14px">Pagina privata. Solo numeri anonimi e i messaggi di «Aiutaci a migliorare».</div>
+<div id="login" class="card"><b>Codice di accesso</b><div style="display:flex;gap:8px;margin-top:8px"><input id="k" type="password" autocomplete="current-password" placeholder="Codice"><button class="go" id="enter">Entra</button></div><div id="lerr" style="color:#D9485F;font-size:13px;margin-top:6px"></div></div>
+<div id="app" hidden>
+<div class="kpis" id="kpis"></div>
+<h2>Giorno per giorno (ultimi 90 giorni)</h2><div class="card" style="overflow-x:auto"><table id="tab"></table></div>
+<h2>Messaggi «Aiutaci a migliorare»</h2>
+<div class="filters" id="flt"><button data-f="all" class="on">Tutti</button><button data-f="bug">Bug</button><button data-f="idea">Idee</button><button data-f="commento">Commenti</button><button data-f="open">Da risolvere</button></div>
+<div id="fb"></div>
+<div style="margin-top:20px"><button id="out">Esci</button></div>
+</div></main>
+<script>
+const $=s=>document.querySelector(s);let KEY='',DATA=null,F='all';
+try{KEY=localStorage.getItem('bt_stats_key')||''}catch(e){}
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(path,opt={}){const r=await fetch(path,{...opt,headers:{'x-key':KEY,'content-type':'application/json'}});if(r.status===401)throw new Error('Codice errato.');return r.json();}
+async function load(){try{DATA=await api('/api/admin/stats');}catch(e){$('#lerr').textContent=e.message;$('#login').hidden=false;$('#app').hidden=true;return;}
+ try{localStorage.setItem('bt_stats_key',KEY)}catch(e){}$('#login').hidden=true;$('#app').hidden=false;render();}
+const COLS=[['start','Partite iniziate'],['day5','Arrivati al giorno 5'],['day10','Giorno 10'],['day30','Giorno 30'],['acct','Account creati'],['tut_done','Tutorial finiti'],['tut_skip','Tutorial saltati'],['bot_maranza','Maranza'],['bot_insta','Insta'],['bot_aura','Aura'],['bot_gym','Gym'],['bot_crypto','Crypto'],['bot_pet','Pet'],['fb_bug','Bug'],['fb_idea','Idee'],['fb_commento','Commenti']];
+function render(){const tot={},by={};for(const r of DATA.stats){tot[r.k]=(tot[r.k]||0)+r.n;(by[r.d]=by[r.d]||{})[r.k]=r.n;}
+ const today=new Date().toISOString().slice(0,10);
+ $('#kpis').innerHTML=[['Partite oggi',(by[today]||{}).start||0],['Partite (90 gg)',tot.start||0],['Arrivati al giorno 5',tot.day5||0],['Arrivati al giorno 30',tot.day30||0],['Account totali',DATA.users],['Messaggi da leggere',DATA.feedback.filter(f=>!f.done).length]].map(([l,v])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+ const days=Object.keys(by).sort().reverse();
+ $('#tab').innerHTML=`<tr><th>Giorno</th>${COLS.map(c=>`<th>${c[1]}</th>`).join('')}</tr>`+(days.length?days.map(d=>`<tr><td>${d.split('-').reverse().join('/')}</td>${COLS.map(c=>`<td>${by[d][c[0]]||''}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${COLS.length+1}">Ancora nessun dato.</td></tr>`);
+ const list=DATA.feedback.filter(f=>F==='all'||(F==='open'?!f.done:f.kind===F));
+ $('#fb').innerHTML=list.length?list.map(f=>{let m={};try{m=JSON.parse(f.meta||'{}')}catch(e){}return`<div class="card ${f.done?'done':''}"><span class="tag ${f.kind}">${f.kind}</span> <span style="font-size:12px;color:#4A5A8A">${new Date(f.at).toLocaleString('it-IT')}</span>
+ <div style="margin-top:8px;white-space:pre-wrap">${esc(f.msg)}</div>${f.mail?`<div class="meta">Risposta a: <a href="mailto:${esc(f.mail)}">${esc(f.mail)}</a></div>`:''}
+ <div class="meta">${esc(Object.entries(m).map(([k,v])=>k+': '+v).join(' · '))}</div>
+ <div style="display:flex;gap:6px;margin-top:10px"><button data-id="${f.id}" data-d="${f.done?0:1}">${f.done?'Riapri':'✓ Risolto'}</button><button data-del="${f.id}">Elimina</button></div></div>`}).join(''):'<div class="card">Nessun messaggio.</div>';
+ $('#fb').querySelectorAll('[data-id]').forEach(b=>b.onclick=async()=>{await api('/api/admin/fb',{method:'POST',body:JSON.stringify({id:+b.dataset.id,done:b.dataset.d==='1'})});load();});
+ $('#fb').querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(!confirm('Eliminare il messaggio?'))return;await api('/api/admin/fb',{method:'POST',body:JSON.stringify({id:+b.dataset.del,del:true})});load();});}
+$('#flt').onclick=e=>{const b=e.target.closest('[data-f]');if(!b)return;F=b.dataset.f;$('#flt').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));render();};
+$('#enter').onclick=()=>{KEY=$('#k').value.trim();load();};$('#k').onkeydown=e=>{if(e.key==='Enter')$('#enter').click();};
+$('#out').onclick=()=>{try{localStorage.removeItem('bt_stats_key')}catch(e){}KEY='';location.reload();};
+if(KEY)load();
+</script></body></html>
