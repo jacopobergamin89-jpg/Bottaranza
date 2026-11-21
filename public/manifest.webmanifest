@@ -1,7 +1,7 @@
 {
   "name": "Bottaranza",
   "short_name": "Bottaranza",
-  "description": "Il Tabboz Simulator per la generazione dei reel. Gratis.",
+  "description": "Il simulatore di vita della generazione dei reel. Gratis.",
   "start_url": "gioco.html",
   "scope": "./",
   "display": "standalone",
